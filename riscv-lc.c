@@ -19,9 +19,6 @@ void cycle() {
     /*
      * core steps
      */
-    info("pc = %d state = %d IR = %d\n", CURRENT_LATCHES.PC, CURRENT_LATCHES.STATE_NUMBER, CURRENT_LATCHES.IR);
-    for (int k = 0; k < NUM_RISCV_LC_REGS; k++)
-        info("%s\t[x%d]:\t0x%08x\n", regs[k], k, CURRENT_LATCHES.REGS[k]);
     
     eval_micro_sequencer();   
     cycle_memory();
@@ -33,7 +30,6 @@ void cycle() {
 
     CYCLE_COUNT++;
 }
-
 
 void cycle_memory() {
     static int mem_cycle_cnt = 0;
@@ -53,21 +49,18 @@ void cycle_memory() {
             NEXT_LATCHES.READY = 1;
         }
 
-        int width = datasize_mux(get_DATASIZE(CURRENT_LATCHES.MICROINSTRUCTION), mask_val(CURRENT_LATCHES.IR, 14, 12), 0);
-        width = (!width ? 4 : (1 << (-1 - width)));
-        info("W = %d width = %d %d\n", W, width, CURRENT_LATCHES.MAR);
+        int datasize = datasize_mux(get_DATASIZE(CURRENT_LATCHES.MICROINSTRUCTION), mask_val(CURRENT_LATCHES.IR, 14, 12), 0) & (0x3);
 
         if (W) {
             /* write */
             /*
              * Lab3-2 assignment
              */
-            info("%d %d %d %d %d\n", CURRENT_LATCHES.MAR, MASK7_0(CURRENT_LATCHES.MDR), MASK15_8(CURRENT_LATCHES.MDR), MASK23_16(CURRENT_LATCHES.MDR), MASK31_24(CURRENT_LATCHES.MDR));
             MEMORY[CURRENT_LATCHES.MAR] = MASK7_0(CURRENT_LATCHES.MDR);
-            if (width >= 2) {
+            if (datasize <= 2) {
                 MEMORY[CURRENT_LATCHES.MAR + 1] = MASK15_8(CURRENT_LATCHES.MDR);
             }
-            if (width >= 4) {
+            if (datasize <= 1) {
                 MEMORY[CURRENT_LATCHES.MAR + 2] = MASK23_16(CURRENT_LATCHES.MDR);
                 MEMORY[CURRENT_LATCHES.MAR + 3] = MASK31_24(CURRENT_LATCHES.MDR);
             }
@@ -77,24 +70,23 @@ void cycle_memory() {
              * Lab3-2 assignment
              * Tips: assign the read value to `MEM_VAL`
              */
-            if (width == 1) {
+            if (datasize == 3) {
                 MEM_VAL = sext_unit(MEMORY[CURRENT_LATCHES.MAR], 8);
-            } else if (width == 2) {
+            } else if (datasize == 2) {
                 MEM_VAL = sext_unit((MEMORY[CURRENT_LATCHES.MAR + 1] << 8)
                     + MEMORY[CURRENT_LATCHES.MAR], 16);
             }
-            else if (width == 4) {
-                MEM_VAL = sext_unit((MEMORY[CURRENT_LATCHES.MAR + 3] << 24)
+            else {
+                MEM_VAL = (MEMORY[CURRENT_LATCHES.MAR + 3] << 24)
                     + (MEMORY[CURRENT_LATCHES.MAR + 2] << 16)
                     + (MEMORY[CURRENT_LATCHES.MAR + 1] << 8)
-                    + MEMORY[CURRENT_LATCHES.MAR], 32);
+                    + MEMORY[CURRENT_LATCHES.MAR], 32;
             }
         }
         mem_cycle_cnt++;
     } else
         mem_cycle_cnt = 0;
 }
-
 
 void latch_datapath_values() {
     /* LD.MDR */
@@ -119,14 +111,12 @@ void latch_datapath_values() {
             ),
             0
         );
-        info("LD.BEN B = %d\n", NEXT_LATCHES.B);
     }
     /* LD.REG */
     if (get_LD_REG(CURRENT_LATCHES.MICROINSTRUCTION)) {
         /*
          *  Lab3-2 assignment
          */
-        info("LD.REG %d %d\n", mask_val(CURRENT_LATCHES.IR, 11, 7), BUS);
         NEXT_LATCHES.REGS[mask_val(CURRENT_LATCHES.IR, 11, 7)] = BUS;
     }
     /* LD.MAR */
